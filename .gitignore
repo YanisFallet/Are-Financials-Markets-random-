@@ -1,0 +1,12 @@
+/.venv/
+/data/samples/
+.env
+
+__pycache__/
+*.pyc
+*.png
+*.csv
+*.json
+*.jsonl
+*.jsonl.gz
+*.jsonl.gz.part

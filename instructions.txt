@@ -1,0 +1,4 @@
+In this project I want to showcase if financial markets are random. The idea is very simple:
+	- We need to collect prices from financial markets using yahoo finance api
+	- Need to create a function to create fake prices 
+
