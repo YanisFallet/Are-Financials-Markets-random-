@@ -14,11 +14,11 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.image_processor import ChartDataset, get_data_loaders
-from model import CNNClassifier, ShallowCNN
+from model import VisionTransformer, SmallViT
 
 def train(model, train_loader, val_loader, criterion, optimizer, device, num_epochs=10):
     """
-    Train the CNN model
+    Train the Vision Transformer model
     
     Args:
         model: The model to train
@@ -108,9 +108,6 @@ def train(model, train_loader, val_loader, criterion, optimizer, device, num_epo
               f'Train Acc: {epoch_train_acc:.4f} | '
               f'Val Loss: {epoch_val_loss:.4f} | '
               f'Val Acc: {epoch_val_acc:.4f}')
-        
-        if epoch % 10 == 0:
-            torch.save(model.state_dict(), os.path.join('CNN/output', f'model_epoch_{epoch}.pth'))
     
     return history
 
@@ -225,7 +222,7 @@ def plot_confusion_matrix(cm, save_path=None):
     plt.show()
 
 def main():
-    parser = argparse.ArgumentParser(description='Train CNN model for chart classification')
+    parser = argparse.ArgumentParser(description='Train Vision Transformer model for chart classification')
     
     parser.add_argument('--real_dir', type=str, default='data/samples/real',
                         help='Directory containing real chart images')
@@ -235,12 +232,12 @@ def main():
                         help='Batch size for training')
     parser.add_argument('--num_epochs', type=int, default=20,
                         help='Number of epochs to train for')
-    parser.add_argument('--learning_rate', type=float, default=0.001,
+    parser.add_argument('--learning_rate', type=float, default=0.0001,
                         help='Learning rate for optimizer')
-    parser.add_argument('--model_type', type=str, default='standard',
-                        choices=['standard', 'shallow'],
+    parser.add_argument('--model_type', type=str, default='small',
+                        choices=['full', 'small'],
                         help='Model type to use')
-    parser.add_argument('--output_dir', type=str, default='CNN/output',
+    parser.add_argument('--output_dir', type=str, default='ViT/output',
                         help='Directory to save output to')
     
     args = parser.parse_args()
@@ -263,11 +260,33 @@ def main():
     print(f"Validation loader size: {len(val_loader.dataset)}")
     
     # Create model
-    print(f"Creating {args.model_type} model...")
-    if args.model_type == 'standard':
-        model = CNNClassifier(in_channels=1, num_classes=2)
+    print(f"Creating {args.model_type} Vision Transformer model...")
+    if args.model_type == 'full':
+        # Full-sized ViT - use smaller parameters than the paper for faster training
+        model = VisionTransformer(
+            img_size=224,
+            patch_size=16,
+            in_channels=1,
+            num_classes=2,
+            embed_dim=384,  # Smaller than the original 768
+            depth=6,  # Smaller than the original 12
+            num_heads=6,  # Smaller than the original 12
+            mlp_dim=1536,  # Smaller than the original 3072
+            dropout=0.1
+        )
     else:
-        model = ShallowCNN(in_channels=1, num_classes=2)
+        # Small ViT for faster training
+        model = SmallViT(
+            img_size=224,
+            patch_size=32,  # Larger patches for fewer tokens
+            in_channels=1,
+            num_classes=2,
+            embed_dim=128,
+            depth=4,
+            num_heads=4,
+            mlp_dim=512,
+            dropout=0.1
+        )
     model.to(device)
     
     # Set up optimizer and loss function
@@ -307,4 +326,4 @@ def main():
     print(f"Model saved to {model_path}")
 
 if __name__ == '__main__':
-    main()
+    main() 

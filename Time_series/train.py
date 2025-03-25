@@ -3,22 +3,22 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 import sys
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # Add parent directory to path to import from data folder
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from data.image_processor import ChartDataset, get_data_loaders
-from model import CNNClassifier, ShallowCNN
+from data.time_series_db import get_time_series_loaders, populate_database
+from models import LSTMClassifier, GRUClassifier, TransformerClassifier, TimeSeriesConvNet
 
-def train(model, train_loader, val_loader, criterion, optimizer, device, num_epochs=10):
+def train(model, train_loader, val_loader, criterion, optimizer, scheduler, device, num_epochs=30):
     """
-    Train the CNN model
+    Train the time series model
     
     Args:
         model: The model to train
@@ -26,6 +26,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, device, num_epo
         val_loader: DataLoader for validation data
         criterion: Loss function
         optimizer: Optimizer
+        scheduler: Learning rate scheduler
         device: Device to train on (cuda or cpu)
         num_epochs: Number of epochs to train for
         
@@ -102,15 +103,15 @@ def train(model, train_loader, val_loader, criterion, optimizer, device, num_epo
         history['val_loss'].append(epoch_val_loss)
         history['val_acc'].append(epoch_val_acc)
         
+        # Update learning rate
+        scheduler.step(epoch_val_loss)
+        
         # Print progress
         print(f'Epoch {epoch+1}/{num_epochs} | '
               f'Train Loss: {epoch_train_loss:.4f} | '
               f'Train Acc: {epoch_train_acc:.4f} | '
               f'Val Loss: {epoch_val_loss:.4f} | '
               f'Val Acc: {epoch_val_acc:.4f}')
-        
-        if epoch % 10 == 0:
-            torch.save(model.state_dict(), os.path.join('CNN/output', f'model_epoch_{epoch}.pth'))
     
     return history
 
@@ -225,23 +226,29 @@ def plot_confusion_matrix(cm, save_path=None):
     plt.show()
 
 def main():
-    parser = argparse.ArgumentParser(description='Train CNN model for chart classification')
+    parser = argparse.ArgumentParser(description='Train time series model for financial data classification')
     
-    parser.add_argument('--real_dir', type=str, default='data/samples/real',
-                        help='Directory containing real chart images')
-    parser.add_argument('--synthetic_dir', type=str, default='data/samples/synthetic',
-                        help='Directory containing synthetic chart images')
+    parser.add_argument('--db_path', type=str, default='data/price_data.db',
+                        help='Path to the SQLite database')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size for training')
-    parser.add_argument('--num_epochs', type=int, default=20,
+    parser.add_argument('--num_epochs', type=int, default=30,
                         help='Number of epochs to train for')
     parser.add_argument('--learning_rate', type=float, default=0.001,
                         help='Learning rate for optimizer')
-    parser.add_argument('--model_type', type=str, default='standard',
-                        choices=['standard', 'shallow'],
+    parser.add_argument('--model_type', type=str, default='lstm',
+                        choices=['lstm', 'gru', 'transformer', 'cnn'],
                         help='Model type to use')
-    parser.add_argument('--output_dir', type=str, default='CNN/output',
+    parser.add_argument('--sequence_length', type=int, default=50,
+                        help='Sequence length for time series data')
+    parser.add_argument('--output_dir', type=str, default='Transformers/output',
                         help='Directory to save output to')
+    parser.add_argument('--hidden_size', type=int, default=128,
+                        help='Hidden size for recurrent models')
+    parser.add_argument('--num_layers', type=int, default=2,
+                        help='Number of layers for models')
+    parser.add_argument('--populate_db', action='store_true',
+                        help='Populate the database before training')
     
     args = parser.parse_args()
     
@@ -252,11 +259,16 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
+    # Populate database if requested
+    if args.populate_db:
+        print("Populating database...")
+        populate_database(db_path=args.db_path, real_count=1000, synthetic_count=1000)
+    
     # Load data
     print("Loading data...")
-    train_loader, val_loader = get_data_loaders(
-        args.real_dir,
-        args.synthetic_dir,
+    train_loader, val_loader = get_time_series_loaders(
+        db_path=args.db_path,
+        sequence_length=args.sequence_length,
         batch_size=args.batch_size
     )
     print(f"Train loader size: {len(train_loader.dataset)}")
@@ -264,15 +276,35 @@ def main():
     
     # Create model
     print(f"Creating {args.model_type} model...")
-    if args.model_type == 'standard':
-        model = CNNClassifier(in_channels=1, num_classes=2)
-    else:
-        model = ShallowCNN(in_channels=1, num_classes=2)
+    if args.model_type == 'lstm':
+        model = LSTMClassifier(
+            input_size=4,  # OHLC data
+            hidden_size=args.hidden_size,
+            num_layers=args.num_layers
+        )
+    elif args.model_type == 'gru':
+        model = GRUClassifier(
+            input_size=4,
+            hidden_size=args.hidden_size,
+            num_layers=args.num_layers
+        )
+    elif args.model_type == 'transformer':
+        model = TransformerClassifier(
+            input_size=4,
+            d_model=args.hidden_size,
+            num_layers=args.num_layers
+        )
+    else:  # CNN
+        model = TimeSeriesConvNet(
+            input_size=4,
+            num_filters=args.hidden_size // 2
+        )
     model.to(device)
     
     # Set up optimizer and loss function
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+    scheduler = ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5, verbose=True)
     
     # Train model
     print("Training model...")
@@ -282,6 +314,7 @@ def main():
         val_loader,
         criterion,
         optimizer,
+        scheduler,
         device,
         num_epochs=args.num_epochs
     )
@@ -296,15 +329,15 @@ def main():
     print(eval_metrics['classification_report'])
     
     # Plot training history
-    plot_training_history(history, save_path=os.path.join(args.output_dir, 'training_history.png'))
+    plot_training_history(history, save_path=os.path.join(args.output_dir, f'{args.model_type}_training_history.png'))
     
     # Plot confusion matrix
-    plot_confusion_matrix(eval_metrics['confusion_matrix'], save_path=os.path.join(args.output_dir, 'confusion_matrix.png'))
+    plot_confusion_matrix(eval_metrics['confusion_matrix'], save_path=os.path.join(args.output_dir, f'{args.model_type}_confusion_matrix.png'))
     
     # Save model
-    model_path = os.path.join(args.output_dir, 'model.pth')
+    model_path = os.path.join(args.output_dir, f'{args.model_type}_model.pth')
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
 
 if __name__ == '__main__':
-    main()
+    main() 

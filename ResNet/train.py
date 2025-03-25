@@ -14,11 +14,11 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.image_processor import ChartDataset, get_data_loaders
-from model import CNNClassifier, ShallowCNN
+from model import resnet18, resnet34, resnet50
 
 def train(model, train_loader, val_loader, criterion, optimizer, device, num_epochs=10):
     """
-    Train the CNN model
+    Train the ResNet model
     
     Args:
         model: The model to train
@@ -108,9 +108,6 @@ def train(model, train_loader, val_loader, criterion, optimizer, device, num_epo
               f'Train Acc: {epoch_train_acc:.4f} | '
               f'Val Loss: {epoch_val_loss:.4f} | '
               f'Val Acc: {epoch_val_acc:.4f}')
-        
-        if epoch % 10 == 0:
-            torch.save(model.state_dict(), os.path.join('CNN/output', f'model_epoch_{epoch}.pth'))
     
     return history
 
@@ -225,7 +222,7 @@ def plot_confusion_matrix(cm, save_path=None):
     plt.show()
 
 def main():
-    parser = argparse.ArgumentParser(description='Train CNN model for chart classification')
+    parser = argparse.ArgumentParser(description='Train ResNet model for chart classification')
     
     parser.add_argument('--real_dir', type=str, default='data/samples/real',
                         help='Directory containing real chart images')
@@ -237,10 +234,10 @@ def main():
                         help='Number of epochs to train for')
     parser.add_argument('--learning_rate', type=float, default=0.001,
                         help='Learning rate for optimizer')
-    parser.add_argument('--model_type', type=str, default='standard',
-                        choices=['standard', 'shallow'],
-                        help='Model type to use')
-    parser.add_argument('--output_dir', type=str, default='CNN/output',
+    parser.add_argument('--model_type', type=str, default='resnet18',
+                        choices=['resnet18', 'resnet34', 'resnet50'],
+                        help='ResNet model type to use')
+    parser.add_argument('--output_dir', type=str, default='ResNet/output',
                         help='Directory to save output to')
     
     args = parser.parse_args()
@@ -264,10 +261,12 @@ def main():
     
     # Create model
     print(f"Creating {args.model_type} model...")
-    if args.model_type == 'standard':
-        model = CNNClassifier(in_channels=1, num_classes=2)
-    else:
-        model = ShallowCNN(in_channels=1, num_classes=2)
+    if args.model_type == 'resnet18':
+        model = resnet18(in_channels=1, num_classes=2)
+    elif args.model_type == 'resnet34':
+        model = resnet34(in_channels=1, num_classes=2)
+    else:  # resnet50
+        model = resnet50(in_channels=1, num_classes=2)
     model.to(device)
     
     # Set up optimizer and loss function
@@ -307,4 +306,4 @@ def main():
     print(f"Model saved to {model_path}")
 
 if __name__ == '__main__':
-    main()
+    main() 

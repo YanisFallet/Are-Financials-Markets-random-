@@ -136,9 +136,10 @@ def get_historical_klines(symbol, interval, start_time=None, end_time=None, limi
     
     # Conversion des types
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    for col in ['open', 'high', 'low', 'close', 'volume']:
+    for col in ['open', 'high', 'low', 'close']:
         df[col] = df[col].astype(float)
-    
+    df.index = pd.to_datetime(df['timestamp'])
+    df = df[['open', 'high', 'low', 'close']]    
     return df
 
 if __name__ == '__main__':
@@ -147,8 +148,8 @@ if __name__ == '__main__':
     print(f"Temps serveur de Binance: {server_time}")
 
     # Récupérer les données des 7 derniers jours
-    end_time = datetime.now() - timedelta(weeks = 50)
-    start_time = end_time - timedelta(weeks = 50)
+    end_time = datetime.now()
+    start_time = end_time - timedelta(days=3)
     
     df = get_historical_klines(
         symbol='BTCUSDT',
@@ -156,6 +157,6 @@ if __name__ == '__main__':
         start_time=start_time,
         end_time=end_time
     )
-    
     print(df.head())
-    print(f"Nombre total de klines: {len(df)}")
+    
+    save_candlestick_chart(df, filename=f"BTCUSDT_1h_{start_time.strftime('%Y-%m-%d')}_{end_time.strftime('%Y-%m-%d')}.png")

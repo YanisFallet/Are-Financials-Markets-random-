@@ -1,4 +1,50 @@
-In this project I want to showcase if financial markets are random. The idea is very simple:
-	- We need to collect prices from financial markets using yahoo finance api
-	- Need to create a function to create fake prices 
+I'm working on a research project to determine whether financial markets are truly random. I need assistance in developing a comprehensive framework with two main approaches:
+Project Structure
 
+Please analyse the architecture first and the code carefully
+
+Approach 1: Image-Based Classification
+I need to:
+
+Complete the code in the data folder to build a robust dataset management system that:
+
+Creates chart images from cryptocurrency data (BTC, ETH, SOL) across various timeframes
+Generates synthetic charts using geometric Brownian motion
+Processes images (convert to grayscale, crop, resize) to optimize for model training
+Implements efficient data loading and batching
+
+
+Implement three classification models to distinguish between real market data and synthetic data:
+
+CNN architecture in the CNN folder
+Vision Transformer in the ViT folder
+ResNet architecture in the ResNet folder
+
+
+
+Approach 2: Time Series Classification with Tabular Data
+I need to:
+
+Create a structured database for OHLC (Open, High, Low, Close) price data
+
+Real market data from cryptocurrencies
+Synthetic data from statistical models
+
+
+Implement sequence models in the Transformers folder:
+
+LSTM
+GRU
+Transformer architecture
+
+
+
+Requirements
+
+Clean, modular, and well-documented code
+Efficient data preprocessing pipelines
+Evaluation metrics to compare model performance
+Training scripts with hyperparameter tuning
+Main script that ties everything together
+
+Can you help me complete this project, starting with the data processing components and then progressing to the model implementations?
